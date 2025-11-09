@@ -87,6 +87,7 @@ export default function AnalysisPage() {
   const [isPlaybackMode, setIsPlaybackMode] = useState(false)
   const [isExporting, setIsExporting] = useState(false)
   const [deletingHistoryId, setDeletingHistoryId] = useState<number | null>(null)
+  const [confirmingHistory, setConfirmingHistory] = useState<TopicHistoryItem | null>(null)
   const insightRef = useRef<HTMLDivElement | null>(null)
 
   const resolvedKeyword = keyword.trim()
@@ -268,14 +269,20 @@ export default function AnalysisPage() {
     setErrorMessage(null)
   }
 
-  async function handleDeleteHistory(id: number) {
+  function handleRequestDelete(item: TopicHistoryItem) {
+    setConfirmingHistory(item)
+  }
+
+  function handleCancelDelete() {
     if (deletingHistoryId !== null) return
-    const target = historyItems.find((item) => item.id === id)
-    const confirmed = window.confirm("确定删除该历史记录吗？")
-    if (!confirmed) return
+    setConfirmingHistory(null)
+  }
+
+  async function handleDeleteHistory(item: TopicHistoryItem) {
+    if (deletingHistoryId !== null) return
     try {
-      setDeletingHistoryId(id)
-      const response = await fetch(`/api/analysis/history?id=${id}`, {
+      setDeletingHistoryId(item.id)
+      const response = await fetch(`/api/analysis/history?id=${item.id}`, {
         method: "DELETE",
       })
       const result = await response.json()
@@ -285,12 +292,11 @@ export default function AnalysisPage() {
       if (Array.isArray(result?.history)) {
         setHistoryItems(parseHistoryItems(result.history))
       } else {
-        setHistoryItems((prev) => prev.filter((item) => item.id !== id))
+        setHistoryItems((prev) => prev.filter((history) => history.id !== item.id))
       }
-      if (isPlaybackMode && target && activeKeyword === target.keyword) {
-        setIsPlaybackMode(false)
-      }
+      // 保持回放模式，避免刚删除又触发自动保存导致记录重新出现
       setLastSavedSignature(null)
+      setConfirmingHistory(null)
     } catch (error) {
       setHistoryError(error instanceof Error ? error.message : "删除历史记录失败")
     } finally {
@@ -500,7 +506,7 @@ export default function AnalysisPage() {
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => handleDeleteHistory(item.id)}
+                        onClick={() => handleRequestDelete(item)}
                         disabled={deletingHistoryId === item.id}
                         title="删除记录"
                       >
@@ -821,6 +827,39 @@ export default function AnalysisPage() {
               )}
             </CardContent>
           </Card>
+        </div>
+      )}
+
+      {confirmingHistory && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div
+            role="dialog"
+            aria-modal="true"
+            className="w-full max-w-sm rounded-lg border bg-background p-6 shadow-lg space-y-6"
+          >
+            <div className="space-y-2 text-center">
+              <h3 className="text-lg font-semibold">删除历史记录</h3>
+              <p className="text-sm text-muted-foreground">
+                确定要删除关键词「{confirmingHistory.keyword}」的历史记录吗？该操作不可撤销。
+              </p>
+            </div>
+            <div className="flex justify-end gap-3">
+              <Button
+                variant="outline"
+                onClick={handleCancelDelete}
+                disabled={deletingHistoryId === confirmingHistory.id}
+              >
+                取消
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={() => handleDeleteHistory(confirmingHistory)}
+                disabled={deletingHistoryId === confirmingHistory.id}
+              >
+                {deletingHistoryId === confirmingHistory.id ? "删除中..." : "确认删除"}
+              </Button>
+            </div>
+          </div>
         </div>
       )}
     </div>
