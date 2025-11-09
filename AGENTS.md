@@ -1,35 +1,34 @@
 # Repository Guidelines
 
 ## Project Structure & Module Organization
-- `app/`：Next.js App Router 页面与 API Route，子目录如 `analysis/`（选题分析 UI）、`api/analysis/articles/`（公众号搜索代理）、`creation/`、`publish/` 等；页面组件均采用客户端组件并依赖 shadcn/ui。
-- `components/`：复用 UI（`components/ui`）与导航类组件，必要时在此扩展表单、图表等通用模块。
-- `lib/`：工具方法与领域模型，例如 `analysis.ts` 定义第三方接口 payload/映射；新增共享逻辑请优先放入此处。
-- `need/`：需求文档与模拟数据（如 `mock_kw_search.json`）；仅供开发阶段调试，不应在生产环境读取。
-- 其他关键文件：`next.config.js`（图片白名单）、`tailwind.config.ts`、`tsconfig.json` 等，请在修改前确认对全局构建的影响。
+- `app/` — Next.js App Router pages and API routes. Key paths: `analysis/` (选题分析 UI), `api/analysis/articles/` (第三方数据代理), `api/analysis/history/` (历史存储接口), `creation/`, `publish/`.
+- `components/` — 可复用 UI，如 `components/ui/button.tsx` 及侧边栏；复杂视图应拆分到这里。
+- `lib/` — 领域逻辑与工具。例如 `analysis.ts` 负责第三方响应映射，`topics.ts` 封装历史保存查询，`sqlite.ts` 提供 sqlite3 CLI 调用。
+- `need/` — 需求说明与 mock 数据 (`mock_kw_search.json`)；生产环境仅用于开发参考。
+- `data/` — 运行时生成的 `content-factory.db`（已在 `.gitignore`）；本地存储关键词历史与洞察快照。
 
 ## Build, Test, and Development Commands
-- `npm run dev`：启动本地开发服务器（默认 `http://localhost:3000`），支持热更新。
-- `npm run build`：执行 Next.js 生产构建，生成 `.next` 产物，请确保在 CI 中运行。
-- `npm start`：以生产模式启动已构建应用。
-- `npm run lint`：运行 Next.js/ESLint 规则；首次执行需根据提示生成 `.eslintrc`。
+- `npm run dev` — 本地开发服务器 (默认 `http://localhost:3000`)。
+- `npm run build` — 生产构建，CI 必跑。
+- `npm start` — 以生产模式运行 `.next` 产物。
+- `npm run lint` — ESLint/Next.js 规则校验。首次执行先按提示生成 `.eslintrc`.
+- 建议本地安装 `sqlite3`，以便历史接口正常工作：`sqlite3 data/content-factory.db "select count(*) from topics;"`.
 
 ## Coding Style & Naming Conventions
-- TypeScript + React 18：优先使用函数组件及 hooks，启用严格模式；公共类型放在 `lib/`。
-- 样式使用 Tailwind CSS，类名按语义分组；复杂样式提取到 `globals.css` 或新建组件。
-- 组件、hook 文件名使用 kebab-case，导出的 React 组件使用 PascalCase；非 UI 工具以 camelCase 命名。
-- 严格执行 DRY：跨页面逻辑放入 `lib/` 或 `components/`，避免复制粘贴。
+- TypeScript、React 18 hooks-first。组件使用 PascalCase；hooks/utilities用 camelCase。
+- Tailwind CSS 为主，复杂样式提取到 `globals.css` 或新组件。使用 `cn()` 合并类名。
+- 坚持 DRY：跨页面逻辑放在 `lib/`；重复 UI 封装到 `components/`.
+- ESLint + TypeScript strict；提交前运行 `npm run lint` 并清理 `console.log`.
 
 ## Testing Guidelines
-- 当前仓库未集成自动化测试；提交前至少手动验证 `analysis` 页面（包含模拟与实时数据切换）及关键 API。
-- 推荐新增测试时采用 Playwright/E2E 场景覆盖数据流，测试文件放在 `tests/`（需自行创建），命名遵循 `<feature>.spec.ts`。
-- 所有测试（若存在）需在 PR 中说明运行命令与结果。
+- 目前无自动化测试；提交前需至少手动验证 `app/analysis`（包含 mock/remote 切换、历史保存、回放、导出）。
+- 如增加自动化测试，推荐 Playwright/E2E，命名 `tests/<feature>.spec.ts`，并在 PR 描述中粘贴运行命令与结果。
 
 ## Commit & Pull Request Guidelines
-- Commit 信息遵循“类型: 描述”模式，例如 `feat: add mock dataset switch`、`fix: handle remote api errors`；聚焦单一变更，必要时拆分。
-- PR 描述需包含：变更摘要、测试/验证步骤、相关截图或日志，以及引用的 issue/任务编号。
-- 当 PR 涉及 API、配置或需求文件（`need/`）调整时，请在描述中明示影响面，并提醒评审重点验证线上密钥。
+- Commit message 建议使用简短的 `type: summary`：例如 `feat: persist topic history`、`fix: filter meaningless keywords`.
+- PR 描述需包含：变更摘要、验证步骤、影响范围（API/DB/Env）、必要的截图或日志；若修改 `need/` 或数据库 schema，请强调迁移步骤。
 
 ## Security & Configuration Tips
-- 真实 API Key 使用环境变量 `DAJIALA_API_KEY` 注入；默认的 fallback key 仅供本地调试。
-- `USE_KW_SEARCH_MOCK` 控制选题分析是否使用模拟数据，CI 与本地推荐默认启用（即不设置或设为 `true`），生产环境显式设为 `false` 并确保网络可访问第三方接口。
-
+- 真实接口密钥通过 `DAJIALA_API_KEY` 提供；默认 fallback 仅供开发。
+- `USE_KW_SEARCH_MOCK` 控制数据来源，生产部署请显式设置并确保服务器可访问 `https://www.dajiala.com`.
+- `data/` 目录包含本地 SQLite 数据，不要提交。备份前可执行 `sqlite3 data/content-factory.db ".backup backup.db"`.
