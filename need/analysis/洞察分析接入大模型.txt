@@ -1,3 +1,38 @@
-请你帮我修改一下选题洞察部分的逻辑，目前的状态是一个简单的数值分析，我希望是可以使用 Openai 兼容的 AI 大模型首先对所有的点赞量TOP5和互动率TOP5的文章去进行一个摘录，简要的分析，然后要把原文中的一些关键信息，一些关键词，还有文章的亮点进行结构化，然后再次使用 AI 大模型对这些摘要之后的文章细节去进行选题洞察的分析。
-我希望是能够输出至少 5 条结构化的选题的洞察，而这样的话方便我去后续的分析和对这一个话题更深的了解，
+请你帮我修改一下选题分析页面下的选题洞察部分的逻辑，目前的状态是一个简单的数值分析，我希望是可以使用Openai兼容的AI大模型首先对所有的点赞量TOP5和互动率TOP5的文章去进行一个摘录，简要的分析，然后要把原文中的一些关键信息，一些关键词，还有文章的亮点进行结构化，然后再次使用AI大模型对这些摘要之后的文章细节去进行选题洞察的分析。
+我希望是能够输出至少5条结构化的选题的洞察，而这样的话方便我去后续的分析和对这一个话题更深的了解，
+必须调用大模型接口进行分析，不需要本地数据模拟，配置openai兼容的AI环境变量已经配好在.env.local文件中，我已经使用外部工具测试过调得通
 请你根据我的这一个需求去帮我进行设计，并且标记可能修改的所有的地方。不要着急修改代码，只需要调研后首先和我确认一下需求和变动范围
+下面是Openai兼容的AI大模型接口请求示例：
+curl 'https://api.kkyyxx.xyz/v1/chat/completions' \
+  -H 'accept: */*' \
+  -H 'accept-language: zh-CN,zh;q=0.9' \
+  -H 'authorization: Bearer sk-hwBcwn9rlAs2y4nDzIhH4unHwZxDfwFMFC8TrMfvgMGaxEMj' \
+  -H 'cache-control: no-cache' \
+  -H 'content-type: application/json' \
+  -H 'origin: https://web.chatboxai.app' \
+  -H 'pragma: no-cache' \
+  -H 'priority: u=1, i' \
+  -H 'referer: https://web.chatboxai.app/' \
+  -H 'sec-ch-ua: "Chromium";v="142", "Google Chrome";v="142", "Not_A Brand";v="99"' \
+  -H 'sec-ch-ua-mobile: ?0' \
+  -H 'sec-ch-ua-platform: "macOS"' \
+  -H 'sec-fetch-dest: empty' \
+  -H 'sec-fetch-mode: cors' \
+  -H 'sec-fetch-site: cross-site' \
+  -H 'user-agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36' \
+  --data-raw '{"model":"claude-4.5-sonnet","messages":[{"role":"user","content":"test"}],"stream":true}'
+
+  返回信息：
+  data: {"id": "chatcmpl-059f8313c63b46f78426ff883b53e", "object": "chat.completion.chunk", "created": 1762700542, "model": "claude-4.5-sonnet", "choices": [{"index": 0, "delta": {"role": "assistant", "content": ""}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-059f8313c63b46f78426ff883b53e", "object": "chat.completion.chunk", "created": 1762700542, "model": "claude-4.5-sonnet", "choices": [{"index": 0, "delta": {"content": "明白了！我会直接回答您的问题，不再读取站点文档。\n\n"}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-059f8313c63b46f78426ff883b53e", "object": "chat.completion.chunk", "created": 1762700542, "model": "claude-4.5-sonnet", "choices": [{"index": 0, "delta": {"content": "如果您有任何关于 "}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-059f8313c63b46f78426ff883b53e", "object": "chat.completion.chunk", "created": 1762700542, "model": "claude-4.5-sonnet", "choices": [{"index": 0, "delta": {"content": "AI、提示工程或其他方面的问题，请随时提问，我会基于我的知识来回答您。"}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-059f8313c63b46f78426ff883b53e", "object": "chat.completion.chunk", "created": 1762700542, "model": "claude-4.5-sonnet", "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}]}
+
+data: {"id": "chatcmpl-059f8313c63b46f78426ff883b53e", "object": "chat.completion.chunk", "created": 1762700542, "model": "claude-4.5-sonnet", "choices": [], "usage": {"prompt_tokens": 1053, "completion_tokens": 72, "total_tokens": 1125, "prompt_tokens_details": {"cached_tokens": 0, "text_tokens": 0, "audio_tokens": 0, "image_tokens": 0}, "completion_tokens_details": {"text_tokens": 0, "audio_tokens": 0, "reasoning_tokens": 0}, "input_tokens": 0, "output_tokens": 0, "input_tokens_details": null}}
+
+data: [DONE]
