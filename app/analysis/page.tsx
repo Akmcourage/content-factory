@@ -14,6 +14,7 @@ import {
   Download,
   ArrowRight,
   AlertTriangle,
+  Trash2,
 } from "lucide-react"
 
 import type { NormalizedArticle } from "@/lib/analysis"
@@ -43,6 +44,27 @@ interface Insight {
   description: string
 }
 
+interface TopicHistoryReport {
+  articles: NormalizedArticle[]
+  topLiked: NormalizedArticle[]
+  topEngagement: (NormalizedArticle & { engagementRate?: number })[]
+  keywordCloud: KeywordEntry[]
+  insights: Insight[]
+}
+
+interface TopicHistoryItem {
+  id: number
+  keyword: string
+  dataSource: "mock" | "remote"
+  articleCount: number
+  total?: number
+  totalPage?: number
+  page?: number
+  rawCutWords?: string
+  createdAt: string
+  report: TopicHistoryReport
+}
+
 export default function AnalysisPage() {
   const [keyword, setKeyword] = useState("")
   const [activeKeyword, setActiveKeyword] = useState("")
@@ -56,7 +78,15 @@ export default function AnalysisPage() {
   const [meta, setMeta] = useState({ total: 0, totalPage: 0, page: 1 })
   const [dataSource, setDataSource] = useState<"mock" | "remote">("mock")
   const [sourcePreference, setSourcePreference] = useState<"mock" | "remote">("mock")
+  const [autoSaveHistory, setAutoSaveHistory] = useState(true)
+  const [historyItems, setHistoryItems] = useState<TopicHistoryItem[]>([])
+  const [historyLoading, setHistoryLoading] = useState(true)
+  const [historyError, setHistoryError] = useState<string | null>(null)
+  const [isSavingHistory, setIsSavingHistory] = useState(false)
+  const [lastSavedSignature, setLastSavedSignature] = useState<string | null>(null)
+  const [isPlaybackMode, setIsPlaybackMode] = useState(false)
   const [isExporting, setIsExporting] = useState(false)
+  const [deletingHistoryId, setDeletingHistoryId] = useState<number | null>(null)
   const insightRef = useRef<HTMLDivElement | null>(null)
 
   const resolvedKeyword = keyword.trim()
@@ -65,6 +95,8 @@ export default function AnalysisPage() {
   const handleSearch = async () => {
     if (!hasKeyword || isSearching) return
 
+    setIsPlaybackMode(false)
+    setLastSavedSignature(null)
     setIsSearching(true)
     setErrorMessage(null)
     setShowInsight(false)
@@ -138,6 +170,166 @@ export default function AnalysisPage() {
     [articles, keywordCloud, activeKeyword],
   )
 
+  async function fetchHistoryItems() {
+    try {
+      setHistoryLoading(true)
+      setHistoryError(null)
+      const response = await fetch("/api/analysis/history")
+      const result = await response.json()
+      if (!response.ok) {
+        throw new Error(result?.message ?? "获取历史记录失败")
+      }
+      const items = Array.isArray(result?.data) ? parseHistoryItems(result.data) : []
+      setHistoryItems(items)
+    } catch (error) {
+      setHistoryError(error instanceof Error ? error.message : "获取历史记录失败")
+    } finally {
+      setHistoryLoading(false)
+    }
+  }
+
+  function buildReportSnapshot() {
+    return {
+      keyword: activeKeyword,
+      dataSource,
+      total: meta.total,
+      totalPage: meta.totalPage,
+      page: meta.page,
+      rawCutWords,
+      articles,
+      topLiked: topLikedArticles,
+      topEngagement: topEngagementArticles.map((article) => ({
+        ...article,
+        engagementRate: Number(calculateEngagementRate(article).toFixed(2)),
+      })),
+      keywordCloud,
+      insights,
+    }
+  }
+
+  function buildHistorySignature() {
+    if (!activeKeyword || !articles.length) {
+      return null
+    }
+    return JSON.stringify({
+      keyword: activeKeyword,
+      source: dataSource,
+      total: meta.total,
+      page: meta.page,
+      articleCount: articles.length,
+      firstArticle: articles[0]?.id ?? "",
+      firstInsight: insights[0]?.title ?? "",
+    })
+  }
+
+  async function persistHistory(signature: string) {
+    try {
+      setIsSavingHistory(true)
+      const snapshot = buildReportSnapshot()
+      const response = await fetch("/api/analysis/history", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(snapshot),
+      })
+      const result = await response.json()
+      if (!response.ok) {
+        throw new Error(result?.message ?? "保存历史记录失败")
+      }
+      if (Array.isArray(result?.history)) {
+        setHistoryItems(parseHistoryItems(result.history))
+      } else {
+        void fetchHistoryItems()
+      }
+      setLastSavedSignature(signature)
+    } catch (error) {
+      setHistoryError(error instanceof Error ? error.message : "保存历史记录失败")
+    } finally {
+      setIsSavingHistory(false)
+    }
+  }
+
+  function handleLoadHistory(item: TopicHistoryItem) {
+    setIsPlaybackMode(true)
+    setKeyword(item.keyword)
+    setActiveKeyword(item.keyword)
+    setDataSource(item.dataSource)
+    setSourcePreference(item.dataSource)
+    setRawCutWords(item.rawCutWords ?? "")
+    setMeta({
+      total: item.total ?? item.articleCount,
+      totalPage: item.totalPage ?? 1,
+      page: item.page ?? 1,
+    })
+    setArticles(item.report.articles ?? [])
+    setShowResults(true)
+    setShowInsight(true)
+    setErrorMessage(null)
+  }
+
+  async function handleDeleteHistory(id: number) {
+    if (deletingHistoryId !== null) return
+    const target = historyItems.find((item) => item.id === id)
+    const confirmed = window.confirm("确定删除该历史记录吗？")
+    if (!confirmed) return
+    try {
+      setDeletingHistoryId(id)
+      const response = await fetch(`/api/analysis/history?id=${id}`, {
+        method: "DELETE",
+      })
+      const result = await response.json()
+      if (!response.ok) {
+        throw new Error(result?.message ?? "删除历史记录失败")
+      }
+      if (Array.isArray(result?.history)) {
+        setHistoryItems(parseHistoryItems(result.history))
+      } else {
+        setHistoryItems((prev) => prev.filter((item) => item.id !== id))
+      }
+      if (isPlaybackMode && target && activeKeyword === target.keyword) {
+        setIsPlaybackMode(false)
+      }
+      setLastSavedSignature(null)
+    } catch (error) {
+      setHistoryError(error instanceof Error ? error.message : "删除历史记录失败")
+    } finally {
+      setDeletingHistoryId(null)
+    }
+  }
+
+  useEffect(() => {
+    void fetchHistoryItems()
+  }, [])
+
+  useEffect(() => {
+    if (!showInsight || !autoSaveHistory || !articles.length || isPlaybackMode) {
+      return
+    }
+    const signature = buildHistorySignature()
+    if (!signature || signature === lastSavedSignature || isSavingHistory) {
+      return
+    }
+    void persistHistory(signature)
+  }, [
+    showInsight,
+    autoSaveHistory,
+    articles,
+    keywordCloud,
+    insights,
+    topLikedArticles,
+    topEngagementArticles,
+    meta.total,
+    meta.totalPage,
+    meta.page,
+    rawCutWords,
+    activeKeyword,
+    dataSource,
+    lastSavedSignature,
+    isSavingHistory,
+    isPlaybackMode,
+  ])
+
   useEffect(() => {
     if (showInsight && insightRef.current) {
       insightRef.current.scrollIntoView({ behavior: "smooth", block: "start" })
@@ -149,26 +341,26 @@ export default function AnalysisPage() {
 
     setIsExporting(true)
     try {
+      const snapshot = buildReportSnapshot()
       const payload = {
-        keyword: activeKeyword,
+        keyword: snapshot.keyword,
         generatedAt: new Date().toISOString(),
-        source: dataSource,
+        source: snapshot.dataSource,
         totals: {
-          total: meta.total,
-          totalPage: meta.totalPage,
-          currentPage: meta.page,
-          articleCount: articles.length,
+          total: snapshot.total,
+          totalPage: snapshot.totalPage,
+          currentPage: snapshot.page,
+          articleCount: snapshot.articles.length,
         },
-        topLiked: topLikedArticles,
-        topEngagement: topEngagementArticles.map((article) => ({
-          ...article,
-          engagementRate: Number(calculateEngagementRate(article).toFixed(2)),
-        })),
-        keywordCloud,
-        insights,
+        rawCutWords: snapshot.rawCutWords,
+        articles: snapshot.articles,
+        topLiked: snapshot.topLiked,
+        topEngagement: snapshot.topEngagement,
+        keywordCloud: snapshot.keywordCloud,
+        insights: snapshot.insights,
       }
 
-      const fileName = `insight-report-${activeKeyword || "report"}-${Date.now()}.json`
+      const fileName = `insight-report-${snapshot.keyword || "report"}-${Date.now()}.json`
       const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" })
       const url = URL.createObjectURL(blob)
 
@@ -248,6 +440,20 @@ export default function AnalysisPage() {
               <p className="text-sm text-muted-foreground">
                 当前关键词：{hasKeyword ? `「${resolvedKeyword}」` : "请输入关键词后再分析"}
               </p>
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <label className="inline-flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4"
+                    checked={autoSaveHistory}
+                    onChange={(event) => setAutoSaveHistory(event.target.checked)}
+                  />
+                  自动保存到历史
+                </label>
+                <div className="text-xs text-muted-foreground flex items-center gap-2">
+                  {isSavingHistory && showInsight && autoSaveHistory && !isPlaybackMode && <span>保存中...</span>}
+                </div>
+              </div>
             </div>
             {errorMessage && (
               <div className="flex items-start gap-2 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
@@ -256,6 +462,62 @@ export default function AnalysisPage() {
               </div>
             )}
           </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>历史关键词</CardTitle>
+          <CardDescription>最近保存的选题及洞察记录</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {historyLoading ? (
+            <div className="space-y-3">
+              {Array.from({ length: 3 }).map((_, index) => (
+                <div key={index} className="h-14 rounded-md bg-muted animate-pulse" />
+              ))}
+            </div>
+          ) : historyError ? (
+            <p className="text-sm text-destructive">{historyError}</p>
+          ) : historyItems.length === 0 ? (
+            <p className="text-sm text-muted-foreground">暂无历史记录，生成洞察后会自动保存。</p>
+          ) : (
+            <div className="divide-y">
+              {historyItems.map((item) => (
+                <div key={item.id} className="py-3 flex flex-col gap-2">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="font-medium">{item.keyword}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {formatHistoryDate(item.createdAt)} · {item.articleCount} 篇 ·{" "}
+                        {item.dataSource === "remote" ? "实时接口" : "模拟数据"}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button variant="outline" size="sm" onClick={() => handleLoadHistory(item)}>
+                        回放选题
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleDeleteHistory(item.id)}
+                        disabled={deletingHistoryId === item.id}
+                        title="删除记录"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                        {deletingHistoryId === item.id ? "删除中..." : "删除"}
+                      </Button>
+                    </div>
+                  </div>
+                  {item.report.insights[0] && (
+                    <p className="text-sm text-muted-foreground">
+                      洞察：{item.report.insights[0].title}
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -704,4 +966,102 @@ function buildInsights(
   })
 
   return insights.slice(0, 5)
+}
+
+function parseHistoryItems(raw: unknown[]): TopicHistoryItem[] {
+  if (!Array.isArray(raw)) {
+    return []
+  }
+
+  return raw
+    .map((item) => {
+      if (!item || typeof item !== "object") {
+        return null
+      }
+      const record = item as Record<string, any>
+      const keyword =
+        typeof record.keyword === "string"
+          ? record.keyword
+          : typeof record.kw === "string"
+            ? record.kw
+            : ""
+      if (!keyword) {
+        return null
+      }
+      const dataSource =
+        record.dataSource === "remote" || record.data_source === "remote" ? "remote" : "mock"
+      return {
+        id: Number(record.id ?? Date.now()),
+        keyword,
+        dataSource,
+        articleCount: Number(record.articleCount ?? record.article_count ?? 0),
+        total: pickNumber(record.total),
+        totalPage: pickNumber(record.totalPage ?? record.total_page),
+        page: pickNumber(record.page),
+        rawCutWords:
+          typeof record.rawCutWords === "string"
+            ? record.rawCutWords
+            : typeof record.raw_cut_words === "string"
+              ? record.raw_cut_words
+              : undefined,
+        createdAt:
+          typeof record.createdAt === "string"
+            ? record.createdAt
+            : typeof record.created_at === "string"
+              ? record.created_at
+              : "",
+        report: normalizeHistoryReport(record.report ?? record.report_json),
+      } satisfies TopicHistoryItem
+    })
+    .filter((item): item is TopicHistoryItem => Boolean(item))
+}
+
+function normalizeHistoryReport(report: unknown): TopicHistoryReport {
+  if (typeof report === "string") {
+    try {
+      return normalizeHistoryReport(JSON.parse(report))
+    } catch {
+      return {
+        articles: [],
+        topLiked: [],
+        topEngagement: [],
+        keywordCloud: [],
+        insights: [],
+      }
+    }
+  }
+
+  if (!report || typeof report !== "object") {
+    return {
+      articles: [],
+      topLiked: [],
+      topEngagement: [],
+      keywordCloud: [],
+      insights: [],
+    }
+  }
+
+  const payload = report as Record<string, unknown>
+  const toArray = <T>(value: unknown) => (Array.isArray(value) ? (value as T[]) : [])
+
+  return {
+    articles: toArray<NormalizedArticle>(payload.articles),
+    topLiked: toArray<NormalizedArticle>(payload.topLiked),
+    topEngagement: toArray<(NormalizedArticle & { engagementRate?: number })>(payload.topEngagement),
+    keywordCloud: toArray<KeywordEntry>(payload.keywordCloud),
+    insights: toArray<Insight>(payload.insights),
+  }
+}
+
+function formatHistoryDate(value?: string) {
+  if (!value) return ""
+  try {
+    return new Date(value).toLocaleString("zh-CN", { hour12: false })
+  } catch {
+    return value
+  }
+}
+
+function pickNumber(value: unknown) {
+  return typeof value === "number" ? value : undefined
 }
