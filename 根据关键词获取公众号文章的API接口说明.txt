@@ -7,12 +7,14 @@ curl --location --request POST 'https://www.dajiala.com/fbmain/monitor/v3/kw_sea
     "mode": 1,
     "period": 7,
     "page": 1,
+    "size": 1,
     "key": "{{key}}",
     "any_kw": "",
     "ex_kw": "",
     "verifycode": "",
     "type": 1
 }'
+上面11 个参数都不能少
 返回消息是：export interface ApifoxModel {
     code: number;
     cost_money: number;
