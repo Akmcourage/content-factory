@@ -567,11 +567,21 @@ export default function AnalysisPage() {
               </div>
             ) : (
               <div className="space-y-4">
-                {articles.map((article) => (
-                  <div
-                    key={article.id}
-                    className="flex gap-4 p-4 rounded-lg border hover:bg-accent/50 transition-colors"
-                  >
+                {articles.map((article) => {
+                  const articleLink = article.shortLink || article.url || ""
+                  const isClickable = Boolean(articleLink)
+                  return (
+                    <a
+                      key={article.id}
+                      href={isClickable ? articleLink : undefined}
+                      target={isClickable ? "_blank" : undefined}
+                      rel={isClickable ? "noreferrer noopener" : undefined}
+                      aria-label={isClickable ? `查看 ${article.title} 原文` : undefined}
+                      className={cn(
+                        "flex gap-4 p-4 rounded-lg border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                        isClickable ? "hover:bg-accent/50 cursor-pointer" : "cursor-default",
+                      )}
+                    >
                     <div className="w-32 h-20 bg-muted rounded-md flex-shrink-0 overflow-hidden">
                       {article.coverUrl ? (
                         // 图片域名较多，使用原生 img 保持兼容
@@ -626,10 +636,17 @@ export default function AnalysisPage() {
                         <span className="ml-auto">
                           互动率: {calculateEngagementRate(article).toFixed(2)}%
                         </span>
+                        {isClickable && (
+                          <span className="flex items-center gap-1 text-primary text-xs font-medium">
+                            查看原文
+                            <ArrowRight className="h-3 w-3" />
+                          </span>
+                        )}
                       </div>
                     </div>
-                  </div>
-                ))}
+                    </a>
+                  )
+                })}
               </div>
             )}
           </CardContent>
@@ -1056,7 +1073,15 @@ function normalizeHistoryReport(report: unknown): TopicHistoryReport {
 function formatHistoryDate(value?: string) {
   if (!value) return ""
   try {
-    return new Date(value).toLocaleString("zh-CN", { hour12: false })
+    const trimmed = value.trim()
+    const normalized = trimmed.includes("T") ? trimmed : trimmed.replace(" ", "T")
+    const hasTimezone = /[zZ]|([+-]\d{2}:?\d{2})$/.test(normalized)
+    const isoString = hasTimezone ? normalized : `${normalized}Z`
+    const date = new Date(isoString)
+    if (Number.isNaN(date.getTime())) {
+      return value
+    }
+    return date.toLocaleString("zh-CN", { hour12: false })
   } catch {
     return value
   }
