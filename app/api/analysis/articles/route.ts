@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server"
 
+import mockKwSearch from "@/need/mock_kw_search.json"
+
 import {
   API_ENDPOINT,
   type ApiResponse,
@@ -11,6 +13,7 @@ import {
 const FALLBACK_API_KEY = "123308c85923b12f9e0"
 
 const API_KEY = process.env.DAJIALA_API_KEY || FALLBACK_API_KEY
+const USE_MOCK_DATA = process.env.USE_KW_SEARCH_MOCK !== "false"
 
 export async function POST(request: Request) {
   let body: Partial<ArticleSearchParams> = {}
@@ -45,6 +48,11 @@ export async function POST(request: Request) {
     excludeKeyword: readOptionalText(body.excludeKeyword ?? body.ex_kw),
   }
 
+  if (USE_MOCK_DATA) {
+    const mockResponse = buildMockApiResponse(keyword, params)
+    return NextResponse.json(buildClientResponse(mockResponse, params, "mock"))
+  }
+
   const payload = buildPayload(params, API_KEY)
 
   try {
@@ -66,7 +74,7 @@ export async function POST(request: Request) {
 
     const data = (await response.json()) as ApiResponse
 
-    if (data.code !== 200) {
+    if (!isSuccessCode(data.code)) {
       return NextResponse.json(
         {
           message: data.msg || "第三方服务返回异常",
@@ -76,17 +84,7 @@ export async function POST(request: Request) {
       )
     }
 
-    const articles = (data.data ?? []).map(mapDatumToArticle)
-
-    return NextResponse.json({
-      data: {
-        articles,
-        total: data.total ?? articles.length,
-        totalPage: data.total_page ?? 1,
-        page: data.page ?? params.page ?? 1,
-        rawCutWords: data.cut_words ?? "",
-      },
-    })
+    return NextResponse.json(buildClientResponse(data, params, "remote"))
   } catch (error) {
     return NextResponse.json(
       {
@@ -111,6 +109,68 @@ function clampNumber(
   }
 
   return Math.max(min, Math.min(max, parsed))
+}
+
+function buildMockApiResponse(keyword: string, params: ArticleSearchParams): ApiResponse {
+  const baseResponse = mockKwSearch as ApiResponse
+  const dataset = Array.isArray(baseResponse.data) ? baseResponse.data : []
+  const keywordLower = keyword.toLowerCase()
+  const size = Math.max(1, Math.min(params.size ?? 10, dataset.length || 10))
+  const filtered = dataset.filter((item) => matchesKeyword(item, keywordLower))
+  const shouldUseFiltered = keywordLower.length > 0 && filtered.length >= size
+  const effectiveData = shouldUseFiltered ? filtered : dataset
+
+  const total = effectiveData.length
+  const totalPage = Math.max(1, Math.ceil(Math.max(total, 1) / size))
+  const requestedPage = Math.max(1, Math.min(params.page ?? 1, totalPage))
+  const start = (requestedPage - 1) * size
+  const pageData = effectiveData.slice(start, start + size)
+
+  return {
+    ...baseResponse,
+    code: 0,
+    msg: "使用本地模拟数据",
+    data: pageData,
+    data_number: pageData.length,
+    total,
+    total_page: totalPage,
+    page: requestedPage,
+    cut_words: keyword,
+  }
+}
+
+function matchesKeyword(item: ApiResponse["data"][number], keywordLower: string) {
+  if (!keywordLower) return true
+  const haystack = [item.title, item.content, item.wx_name, item.classify]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase()
+  return haystack.includes(keywordLower)
+}
+
+function buildClientResponse(
+  apiResponse: ApiResponse,
+  params: ArticleSearchParams,
+  source: "mock" | "remote",
+) {
+  const articles = (apiResponse.data ?? []).map(mapDatumToArticle)
+
+  return {
+    data: {
+      articles,
+      total: apiResponse.total ?? articles.length,
+      totalPage: apiResponse.total_page ?? 1,
+      page: apiResponse.page ?? params.page ?? 1,
+      rawCutWords: apiResponse.cut_words ?? "",
+    },
+    meta: {
+      source,
+    },
+  }
+}
+
+function isSuccessCode(code?: number) {
+  return code === 0 || code === 200
 }
 
 function readText(value: unknown) {

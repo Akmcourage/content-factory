@@ -26,6 +26,9 @@ interface ArticleApiResponse {
     page: number
     rawCutWords: string
   }
+  meta?: {
+    source?: "mock" | "remote"
+  }
 }
 
 interface KeywordEntry {
@@ -50,6 +53,7 @@ export default function AnalysisPage() {
   const [rawCutWords, setRawCutWords] = useState("")
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [meta, setMeta] = useState({ total: 0, totalPage: 0, page: 1 })
+  const [dataSource, setDataSource] = useState<"mock" | "remote">("remote")
 
   const hasKeyword = keyword.trim().length > 0
 
@@ -68,7 +72,7 @@ export default function AnalysisPage() {
         mode: 1,
         period: 7,
         page: 1,
-        size: 1,
+        size: 20,
         key: "123308c85923b12f9e0",
         any_kw: "",
         ex_kw: "",
@@ -97,6 +101,7 @@ export default function AnalysisPage() {
         totalPage: result.data.totalPage ?? 1,
         page: result.data.page ?? 1,
       })
+      setDataSource(result.meta?.source === "mock" ? "mock" : "remote")
       setActiveKeyword(payload.kw)
       setShowResults(true)
     } catch (error) {
@@ -185,7 +190,14 @@ export default function AnalysisPage() {
           <CardHeader>
             <div className="flex items-center justify-between flex-wrap gap-4">
               <div>
-                <CardTitle>搜索结果</CardTitle>
+                <div className="flex items-center gap-3">
+                  <CardTitle>搜索结果</CardTitle>
+                  {dataSource === "mock" && (
+                    <Badge variant="secondary" className="text-xs font-normal">
+                      模拟数据
+                    </Badge>
+                  )}
+                </div>
                 <CardDescription>
                   {activeKeyword ? (
                     <>
