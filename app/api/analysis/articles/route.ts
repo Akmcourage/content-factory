@@ -36,6 +36,8 @@ export async function POST(request: Request) {
     )
   }
 
+  const requestedSource = readSourcePreference(body.source)
+
   const params: ArticleSearchParams = {
     keyword,
     period: clampNumber(body.period, 7, 1, 30),
@@ -48,7 +50,10 @@ export async function POST(request: Request) {
     excludeKeyword: readOptionalText(body.excludeKeyword ?? body.ex_kw),
   }
 
-  if (USE_MOCK_DATA) {
+  const shouldUseMock =
+    requestedSource === "mock" || (!requestedSource && USE_MOCK_DATA)
+
+  if (shouldUseMock) {
     const mockResponse = buildMockApiResponse(keyword, params)
     return NextResponse.json(buildClientResponse(mockResponse, params, "mock"))
   }
@@ -84,7 +89,7 @@ export async function POST(request: Request) {
       )
     }
 
-    return NextResponse.json(buildClientResponse(data, params, "remote"))
+	    return NextResponse.json(buildClientResponse(data, params, "remote"))
   } catch (error) {
     return NextResponse.json(
       {
@@ -171,6 +176,16 @@ function buildClientResponse(
 
 function isSuccessCode(code?: number) {
   return code === 0 || code === 200
+}
+
+function readSourcePreference(value: unknown): "mock" | "remote" | undefined {
+  if (typeof value !== "string") {
+    return undefined
+  }
+  const normalized = value.trim().toLowerCase()
+  if (normalized === "mock") return "mock"
+  if (normalized === "remote") return "remote"
+  return undefined
 }
 
 function readText(value: unknown) {

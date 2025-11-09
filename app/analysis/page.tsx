@@ -17,6 +17,7 @@ import {
 } from "lucide-react"
 
 import type { NormalizedArticle } from "@/lib/analysis"
+import { cn } from "@/lib/utils"
 
 interface ArticleApiResponse {
   data: {
@@ -53,9 +54,11 @@ export default function AnalysisPage() {
   const [rawCutWords, setRawCutWords] = useState("")
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [meta, setMeta] = useState({ total: 0, totalPage: 0, page: 1 })
-  const [dataSource, setDataSource] = useState<"mock" | "remote">("remote")
+  const [dataSource, setDataSource] = useState<"mock" | "remote">("mock")
+  const [sourcePreference, setSourcePreference] = useState<"mock" | "remote">("mock")
 
-  const hasKeyword = keyword.trim().length > 0
+  const resolvedKeyword = keyword.trim()
+  const hasKeyword = resolvedKeyword.length > 0
 
   const handleSearch = async () => {
     if (!hasKeyword || isSearching) return
@@ -65,7 +68,7 @@ export default function AnalysisPage() {
     setShowInsight(false)
 
     try {
-      const normalizedKeyword = keyword.trim()
+      const normalizedKeyword = resolvedKeyword
       const payload = {
         kw: normalizedKeyword,
         sort_type: 1,
@@ -78,6 +81,7 @@ export default function AnalysisPage() {
         ex_kw: "",
         verifycode: "",
         type: 1,
+        source: sourcePreference,
       }
 
       const response = await fetch("/api/analysis/articles", {
@@ -148,32 +152,56 @@ export default function AnalysisPage() {
         </CardHeader>
         <CardContent>
           <div className="flex flex-col gap-4">
-            <div className="flex gap-4">
-              <Input
-                placeholder="请输入关键词，例如：人工智能、ChatGPT..."
-                value={keyword}
-                onChange={(e) => setKeyword(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault()
-                    handleSearch()
-                  }
-                }}
-                className="flex-1"
-              />
-              <Button onClick={handleSearch} disabled={isSearching || !hasKeyword}>
-                {isSearching ? (
-                  <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
-                    搜索中...
-                  </>
-                ) : (
-                  <>
-                    <Search className="h-4 w-4 mr-2" />
-                    开始分析
-                  </>
-                )}
-              </Button>
+            <div className="flex flex-col gap-3">
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
+                <div className="flex-1 space-y-2">
+                  <label className="text-sm font-medium">关键词</label>
+                  <Input
+                    placeholder="请输入关键词，例如：人民日报、人工智能..."
+                    value={keyword}
+                    onChange={(event) => setKeyword(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        event.preventDefault()
+                        handleSearch()
+                      }
+                    }}
+                  />
+                </div>
+
+                <div className="space-y-2 lg:w-48">
+                  <label className="text-sm font-medium">数据来源</label>
+                  <select
+                    value={sourcePreference}
+                    onChange={(event) => setSourcePreference(event.target.value as "mock" | "remote")}
+                    className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    <option value="mock">模拟数据 (推荐)</option>
+                    <option value="remote">实时接口</option>
+                  </select>
+                </div>
+
+                <div className="space-y-2 lg:w-48">
+                  <label className="text-sm font-medium">开始分析</label>
+                  <Button onClick={handleSearch} disabled={isSearching || !hasKeyword} className="w-full">
+                    {isSearching ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
+                        搜索中...
+                      </>
+                    ) : (
+                      <>
+                        <Search className="h-4 w-4 mr-2" />
+                        开始分析
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </div>
+
+              <p className="text-sm text-muted-foreground">
+                当前关键词：{hasKeyword ? `「${resolvedKeyword}」` : "请输入关键词后再分析"}
+              </p>
             </div>
             {errorMessage && (
               <div className="flex items-start gap-2 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
@@ -262,11 +290,17 @@ export default function AnalysisPage() {
                             <span>{formatPublishTime(article)}</span>
                           </div>
                         </div>
-                        {article.isOriginal && (
-                          <Badge variant="outline" className="flex-shrink-0">
-                            原创
-                          </Badge>
-                        )}
+                        <Badge
+                          variant="outline"
+                          className={cn(
+                            "flex-shrink-0 border",
+                            article.isOriginal
+                              ? "border-blue-200 bg-blue-50 text-blue-700"
+                              : "border-transparent bg-muted text-muted-foreground",
+                          )}
+                        >
+                          {article.isOriginal ? "原创" : "非原创"}
+                        </Badge>
                       </div>
                       <div className="flex items-center gap-4 mt-3 text-sm text-muted-foreground flex-wrap">
                         <span className="flex items-center gap-1">
