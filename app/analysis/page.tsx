@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -56,6 +56,8 @@ export default function AnalysisPage() {
   const [meta, setMeta] = useState({ total: 0, totalPage: 0, page: 1 })
   const [dataSource, setDataSource] = useState<"mock" | "remote">("mock")
   const [sourcePreference, setSourcePreference] = useState<"mock" | "remote">("mock")
+  const [isExporting, setIsExporting] = useState(false)
+  const insightRef = useRef<HTMLDivElement | null>(null)
 
   const resolvedKeyword = keyword.trim()
   const hasKeyword = resolvedKeyword.length > 0
@@ -135,6 +137,50 @@ export default function AnalysisPage() {
     () => buildInsights(articles, keywordCloud, activeKeyword),
     [articles, keywordCloud, activeKeyword],
   )
+
+  useEffect(() => {
+    if (showInsight && insightRef.current) {
+      insightRef.current.scrollIntoView({ behavior: "smooth", block: "start" })
+    }
+  }, [showInsight])
+
+  const handleExportReport = () => {
+    if (!showInsight || !articles.length) return
+
+    setIsExporting(true)
+    try {
+      const payload = {
+        keyword: activeKeyword,
+        generatedAt: new Date().toISOString(),
+        source: dataSource,
+        totals: {
+          total: meta.total,
+          totalPage: meta.totalPage,
+          currentPage: meta.page,
+          articleCount: articles.length,
+        },
+        topLiked: topLikedArticles,
+        topEngagement: topEngagementArticles.map((article) => ({
+          ...article,
+          engagementRate: Number(calculateEngagementRate(article).toFixed(2)),
+        })),
+        keywordCloud,
+        insights,
+      }
+
+      const fileName = `insight-report-${activeKeyword || "report"}-${Date.now()}.json`
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" })
+      const url = URL.createObjectURL(blob)
+
+      const anchor = document.createElement("a")
+      anchor.href = url
+      anchor.download = fileName
+      anchor.click()
+      URL.revokeObjectURL(url)
+    } finally {
+      setIsExporting(false)
+    }
+  }
 
   return (
     <div className="p-8 space-y-6">
@@ -329,7 +375,7 @@ export default function AnalysisPage() {
       )}
 
       {showInsight && (
-        <div className="space-y-6">
+        <div className="space-y-6" ref={insightRef}>
           <Card className="bg-gradient-to-br from-blue-50 to-purple-50 dark:from-blue-950 dark:to-purple-950">
             <CardHeader>
               <div className="flex items-center justify-between flex-wrap gap-4">
@@ -343,9 +389,14 @@ export default function AnalysisPage() {
                   </CardDescription>
                 </div>
                 <div className="flex gap-2">
-                  <Button variant="outline" size="sm">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleExportReport}
+                    disabled={!showInsight || !articles.length || isExporting}
+                  >
                     <Download className="h-4 w-4 mr-2" />
-                    导出报告
+                    {isExporting ? "导出中..." : "导出报告"}
                   </Button>
                   <Button size="sm">
                     <ArrowRight className="h-4 w-4 mr-2" />
@@ -569,7 +620,25 @@ function splitWords(text: string) {
   return text
     .split(/[\s,，。、“”‘’"'；;·、|/\\\-]+/)
     .map((word) => word.trim())
-    .filter((word) => word.length >= 2)
+    .filter(isMeaningfulKeyword)
+}
+
+function isMeaningfulKeyword(word: string) {
+  if (word.length < 2) {
+    return false
+  }
+  // 纯数字或纯字母缺乏分析意义，直接过滤
+  if (/^[0-9]+$/.test(word)) {
+    return false
+  }
+  if (/^[a-zA-Z]+$/.test(word)) {
+    return false
+  }
+  // 没有中文或其他 CJK 字符时，多半为无意义编号
+  if (!/[\u4e00-\u9fff]/.test(word)) {
+    return false
+  }
+  return true
 }
 
 function buildInsights(
