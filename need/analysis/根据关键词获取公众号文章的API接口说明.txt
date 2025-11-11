@@ -1,19 +1,25 @@
 请你帮我完成选题分析这个页面中获取公众号文章的逻辑，根据关键词获取公众号文章的API接口如下，key为：123308c85923b12f9e0
-curl --location --request POST 'https://www.dajiala.com/fbmain/monitor/v3/kw_search' \
---header 'Content-Type: application/json' \
---data-raw '{
-    "kw": "人民日报",
-    "sort_type": 1,
-    "mode": 1,
-    "period": 7,
-    "page": 1,
-    "size": 1,
-    "key": "{{key}}",
-    "any_kw": "",
-    "ex_kw": "",
-    "verifycode": "",
-    "type": 1
-}'
+curl 'https://web-proxy.apifox.com/api/v1/request' \
+  -H 'accept: */*' \
+  -H 'accept-language: zh-CN,zh;q=0.9,en;q=0.8,my;q=0.7,lo;q=0.6' \
+  -H 'api-h0: User-Agent=Apifox/1.0.0 (https://apifox.com), Content-Type=application/json, Accept=*/*, Cache-Control=no-cache, Host=www.dajiala.com, Accept-Encoding=gzip%2C deflate%2C br, Connection=keep-alive' \
+  -H 'api-o0: method=POST, timings=true, timeout=300000, rejectUnauthorized=false, followRedirect=true' \
+  -H 'api-u: https://www.dajiala.com/fbmain/monitor/v3/kw_search' \
+  -H 'authorization: anonymous' \
+  -H 'cache-control: no-cache' \
+  -H 'content-type: application/json' \
+  -H 'origin: https://s.apifox.cn' \
+  -H 'pragma: no-cache' \
+  -H 'priority: u=1, i' \
+  -H 'referer: https://s.apifox.cn/' \
+  -H 'sec-ch-ua: "Chromium";v="142", "Google Chrome";v="142", "Not_A Brand";v="99"' \
+  -H 'sec-ch-ua-mobile: ?0' \
+  -H 'sec-ch-ua-platform: "Windows"' \
+  -H 'sec-fetch-dest: empty' \
+  -H 'sec-fetch-mode: cors' \
+  -H 'sec-fetch-site: cross-site' \
+  -H 'user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36' \
+  --data-raw $'{\r\n    "kw": "微信运动",\r\n    "sort_type": 1,\r\n    "mode": 1,\r\n    "period": 7,\r\n    "page": 1,\r\n    "size": 1,\r\n    "key": "JZL308c85923b12f9e0",\r\n    "any_kw": "",\r\n    "ex_kw": "",\r\n    "verifycode": "",\r\n    "type": 1\r\n}'
 上面11 个参数都不能少
 返回消息是：export interface ApifoxModel {
     code: number;
